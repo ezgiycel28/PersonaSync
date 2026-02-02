@@ -4,6 +4,7 @@ export default function HomeScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>🚀 PersonaSync</Text>
+      <Text style={styles.title}>🚀 Ezgi Yücel</Text>
       <Text style={styles.subtitle}>Kişisel Verimlilik Koçun</Text>
     </View>
   );
