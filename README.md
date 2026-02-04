@@ -35,17 +35,54 @@ docker-compose up --build
 ```
 İlk seferde biraz bekleyin, gerekli dosyaları indiriyor.
 
+✅ Başarılı: `http://localhost:8000/docs` adresinde Swagger açılmalı.
+
 ### 3. Yeni terminal aç, frontend'i kur
 ```bash
 cd frontend
 npm install
-npx expo start
 ```
 
-### 4. Telefonda test et
-- Expo Go uygulamasını aç
-- Terminaldeki QR kodu tara
-- Uygulama açılacak!
+### 4. Frontend .env dosyası oluştur
+
+`frontend/` klasöründe `.env` dosyası oluştur:
+```env
+EXPO_PUBLIC_API_URL=http://BILGISAYAR_IP:8000
+```
+
+**⚠️ Önemli:** `BILGISAYAR_IP` yerine kendi IP adresini yaz!
+
+#### IP Adresini Bulma:
+
+**Windows:**
+```bash
+ipconfig
+```
+→ "Wireless LAN adapter Wi-Fi" altındaki `IPv4 Address` (örn: 192.168.1.164)
+
+**Mac/Linux:**
+```bash
+ifconfig | grep inet
+```
+
+#### Örnek .env:
+```env
+EXPO_PUBLIC_API_URL=http://192.168.1.164:8000
+```
+
+### 5. Frontend'i başlat
+```bash
+npx expo start -c
+```
+
+(`-c` flag'i cache'i temizler)
+
+### 6. Telefonda test et
+
+1. Telefon ve bilgisayar **aynı Wi-Fi**'a bağlı olmalı
+2. Expo Go uygulamasını aç
+3. Terminaldeki QR kodu tara
+4. Uygulama açılacak!
 
 ## Günlük Çalışma
 
@@ -79,3 +116,14 @@ PersonaSync/
 
 - Backend API: http://localhost:8000
 - API Docs (Swagger): http://localhost:8000/docs
+
+## Sık Karşılaşılan Hatalar
+
+### "Network request failed"
+- `.env` dosyasında IP adresi doğru mu?
+- Telefon ve bilgisayar aynı Wi-Fi'da mı?
+- Backend çalışıyor mu?
+- `npx expo start -c` ile cache temizledin mi?
+
+### "Not Found" hatası
+- API endpoint yolu doğru mu? (`/api/` prefix'i var mı?)
