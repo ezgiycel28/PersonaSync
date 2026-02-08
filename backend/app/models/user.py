@@ -1,6 +1,8 @@
 from sqlalchemy import Column, Integer, String, DateTime, Boolean
 from datetime import datetime
 from app.core.database import Base
+from sqlalchemy.orm import relationship
+
 
 class User(Base):
     __tablename__ = "users"
@@ -18,3 +20,4 @@ class User(Base):
     is_profile_complete = Column(Boolean, default=False)
     
     created_at = Column(DateTime, default=datetime.utcnow)
+    pomodoro_sessions = relationship("PomodoroSession", back_populates="user")
