@@ -2,9 +2,11 @@ import { StyleSheet, View, Text, TouchableOpacity, ScrollView } from 'react-nati
 import { useAuth } from '@/contexts/AuthContext';
 import { PersonaSyncColors, Spacing, BorderRadius, Shadows } from '@/constants/theme';
 import { StatusBar } from 'expo-status-bar';
+import { useRouter } from 'expo-router';
 
 export default function HomeScreen() {
   const { user, logout } = useAuth();
+  const router = useRouter();
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -74,7 +76,11 @@ export default function HomeScreen() {
             </View>
             <Text style={styles.progressText}>0 / {user?.daily_study_target || 0} dakika</Text>
           </View>
-          <TouchableOpacity style={styles.startButton} activeOpacity={0.8}>
+          <TouchableOpacity 
+            style={styles.startButton} 
+            activeOpacity={0.8}
+            onPress={() => router.push('/pomodoro')}
+          >
             <Text style={styles.startButtonText}>🍅 Pomodoro Başlat</Text>
           </TouchableOpacity>
         </View>
