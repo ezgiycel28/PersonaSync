@@ -1,21 +1,14 @@
 version: '3.8'
 
 services:
-  backend:
-    build: ./backend
-    container_name: personasync-backend
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./backend:/app
-    environment:
-      - DEBUG=true
-    depends_on:
-      - postgres
 
+  # ──────────────────────────────────────────
+  # PostgreSQL Veritabanı
+  # ──────────────────────────────────────────
   postgres:
     image: postgres:15-alpine
     container_name: personasync-db
+    restart: unless-stopped
     environment:
       POSTGRES_USER: personasync
       POSTGRES_PASSWORD: personasync123
@@ -24,6 +17,30 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U personasync -d personasync_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ──────────────────────────────────────────
+  # FastAPI Backend
+  # ──────────────────────────────────────────
+  backend:
+    build: ./backend
+    container_name: personasync-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    env_file:
+      - ./backend/.env            # GEMINI_API_KEY ve SECRET_KEY buradan okunur
+    environment:
+      - DATABASE_URL=postgresql://personasync:personasync123@postgres:5432/personasync_db
+    depends_on:
+      postgres:
+        condition: service_healthy  # Postgres tamamen hazır olmadan backend başlamaz
 
 volumes:
   postgres_data:

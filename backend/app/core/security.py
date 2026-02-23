@@ -4,11 +4,14 @@ from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
+import os
 
-SECRET_KEY = "personasync-secret-key-degistir-bunu"
+SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
+if not SECRET_KEY:
+    raise EnvironmentError("SECRET_KEY ortam değişkeni tanımlı değil.")
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
 
