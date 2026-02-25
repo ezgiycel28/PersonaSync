@@ -1,6 +1,5 @@
 // API Configuration
-const API_BASE_URL =process.env.EXPO_PUBLIC_API_URL;
-
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 if (!API_BASE_URL) {
   throw new Error('EXPO_PUBLIC_API_URL environment variable is not set. Check your .env file.');
 }
