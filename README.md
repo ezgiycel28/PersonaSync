@@ -7,7 +7,7 @@ Yapay zeka destekli kişisel verimlilik ve öğrenme koçu mobil uygulaması.
 - **Frontend:** React Native (Expo)
 - **Backend:** Python FastAPI
 - **Database:** PostgreSQL
-- **AI:** (Belirlenecek)
+- **AI:** Google Gemini 2.5 Flash-Lite
 - **DevOps:** Docker
 
 ## Gereksinimler
@@ -29,7 +29,19 @@ git clone https://github.com/ezgiycel28/PersonaSync.git
 cd PersonaSync
 ```
 
-### 2. Backend'i başlat
+### 2. Backend .env dosyası oluştur
+`backend/` klasöründe `.env` dosyası oluştur ve aşağıdaki değişkenleri doldur:
+
+```env
+DATABASE_URL=
+SECRET_KEY=
+GEMINI_API_KEY=
+```
+
+- `SECRET_KEY` → rastgele uzun bir string
+- `GEMINI_API_KEY` → Google AI Studio'dan alabilirsin: https://aistudio.google.com/app/apikey
+
+### 3. Backend'i başlat
 ```bash
 docker-compose up --build
 ```
@@ -37,13 +49,13 @@ docker-compose up --build
 
 ✅ Başarılı: `http://localhost:8000/docs` adresinde Swagger açılmalı.
 
-### 3. Yeni terminal aç, frontend'i kur
+### 4. Yeni terminal aç, frontend'i kur
 ```bash
 cd frontend
 npm install
 ```
 
-### 4. Frontend .env dosyası oluştur
+### 5. Frontend .env dosyası oluştur
 
 `frontend/` klasöründe `.env` dosyası oluştur:
 ```env
@@ -70,14 +82,14 @@ ifconfig | grep inet
 EXPO_PUBLIC_API_URL=http://192.168.1.164:8000
 ```
 
-### 5. Frontend'i başlat
+### 6. Frontend'i başlat
 ```bash
 npx expo start -c
 ```
 
 (`-c` flag'i cache'i temizler)
 
-### 6. Telefonda test et
+### 7. Telefonda test et
 
 1. Telefon ve bilgisayar **aynı Wi-Fi**'a bağlı olmalı
 2. Expo Go uygulamasını aç
