@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getWeeklyReports } from '@/services/api';
 
 
 /**
@@ -37,7 +38,7 @@ export default function ReportingPage() {
 
 const getAuthToken = async () => {
   try {
-    const token = await AsyncStorage.getItem('access_token');
+    const token = await AsyncStorage.getItem('@personasync_token');
     console.log('Token:', token); // Debug için
     return token;
   } catch (error) {
@@ -67,22 +68,31 @@ const getAuthToken = async () => {
     return response.json();
   };
 
-  // Tüm raporları yükle
-  const loadReports = async () => {
-    try {
-      setLoading(true);
-      const data = await fetchWithAuth(`${API_BASE_URL}/reports?limit=20`);
-      setReports(data.reports);
-      
-      if (data.reports.length > 0) {
-        setSelectedReport(data.reports[0]);
-      }
-    } catch (err: any) {
-      setError('Raporlar yüklenirken hata oluştu: ' + err.message);
-    } finally {
+// Tüm raporları yükle
+const loadReports = async () => {
+  try {
+    setLoading(true);
+    const token = await getAuthToken();
+    
+    if (!token) {
+      setError('Lütfen giriş yapın');
       setLoading(false);
+      return;
     }
-  };
+
+    const data = await getWeeklyReports(token);
+    setReports(data.reports);
+    
+    if (data.reports.length > 0) {
+      setSelectedReport(data.reports[0]);
+    }
+  } catch (err: any) {
+    setError('Raporlar yüklenirken hata oluştu: ' + err.message);
+    console.error('Reporting error:', err);
+  } finally {
+    setLoading(false);
+  }
+};
 
   // Sayfa yüklendiğinde raporları getir
   useEffect(() => {
