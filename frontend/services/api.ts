@@ -113,3 +113,53 @@ export async function getUser(userId: number, token: string): Promise<User> {
 
   return response.json();
 }
+// Reporting API Functions
+export async function getWeeklyReports(token: string): Promise<any> {
+  const response = await fetch(`${API_BASE_URL}/api/reports?limit=20`, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    const error: ApiError = await response.json();
+    throw new Error(error.detail || 'Raporlar yüklenemedi');
+  }
+
+  return response.json();
+}
+
+export async function getCurrentWeekReport(token: string): Promise<any> {
+  const response = await fetch(`${API_BASE_URL}/api/reports/latest/current-week`, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    const error: ApiError = await response.json();
+    throw new Error(error.detail || 'Rapor oluşturulamadı');
+  }
+
+  return response.json();
+}
+
+export async function generateReport(token: string, weekStart?: string, weekEnd?: string): Promise<any> {
+  const response = await fetch(`${API_BASE_URL}/api/reports/generate`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify({ week_start: weekStart, week_end: weekEnd }),
+  });
+
+  if (!response.ok) {
+    const error: ApiError = await response.json();
+    throw new Error(error.detail || 'Rapor oluşturulamadı');
+  }
+
+  return response.json();
+}
