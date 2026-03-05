@@ -42,15 +42,42 @@ logger = logging.getLogger(__name__)
 # ──────────────────────────────────────────────
 # Yardımcı Fonksiyonlar
 # ──────────────────────────────────────────────
+_LEARNING_STYLE_MAP = {
+    "visual": LearningStyle.VISUAL,
+    "auditory": LearningStyle.AUDITORY,
+    "kinesthetic": LearningStyle.KINESTHETIC,
+    "reading_writing": LearningStyle.READING_WRITING,
+    "mixed": LearningStyle.MIXED,
+}
+
+_WORK_TENDENCY_MAP = {
+    "morning_lark": WorkTendency.MORNING_LARK,
+    "night_owl": WorkTendency.NIGHT_OWL,
+    "sprinter": WorkTendency.SPRINTER,
+    "marathoner": WorkTendency.MARATHONER,
+}
+
 def _get_learning_style(user_style: Optional[str]) -> LearningStyle:
+    if not user_style:
+        return LearningStyle.VISUAL
+    # Try English key mapping first, then fall back to enum value (Turkish)
+    normalized = user_style.strip().lower()
+    if normalized in _LEARNING_STYLE_MAP:
+        return _LEARNING_STYLE_MAP[normalized]
     try:
-        return LearningStyle(user_style) if user_style else LearningStyle.VISUAL
+        return LearningStyle(user_style)
     except ValueError:
         return LearningStyle.VISUAL
 
 def _get_work_tendency(user_tendency: Optional[str]) -> WorkTendency:
+    if not user_tendency:
+        return WorkTendency.MORNING_LARK
+    # Try English key mapping first, then fall back to enum value (Turkish)
+    normalized = user_tendency.strip().lower()
+    if normalized in _WORK_TENDENCY_MAP:
+        return _WORK_TENDENCY_MAP[normalized]
     try:
-        return WorkTendency(user_tendency) if user_tendency else WorkTendency.MORNING_LARK
+        return WorkTendency(user_tendency)
     except ValueError:
         return WorkTendency.MORNING_LARK
 
@@ -111,7 +138,8 @@ async def get_daily_advice(
 
         # 3. AI Koç'tan Tavsiye İste
         logger.info(f"AI Tavsiyesi isteniyor - User: {current_user.id}")
-        advice = await engine.generate_coaching_advice(profile, metrics)
+        extra_context = request.extra_context if request else None
+        advice = await engine.generate_coaching_advice(profile, metrics, extra_context=extra_context)
         
         return advice
 
@@ -124,7 +152,7 @@ async def get_daily_advice(
         logger.error(f"AI Servis Hatası: {e}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"AI servisine bağlanılamadı: {str(e)}"
+            detail="AI servisine şu anda bağlanılamıyor. Lütfen daha sonra tekrar deneyin."
         )
     except Exception as e:
         logger.exception(f"Beklenmeyen Hata: {e}")

@@ -86,12 +86,8 @@ def root():
 
 @app.get("/health", tags=["Root"])
 def health_check():
-    """API ve Gemini servis durumu."""
-    gemini = get_gemini_service()
-    gemini_status = gemini.health_check()
-
+    """API sağlık kontrolü."""
     return {
         "api_status": "healthy",
-        "ai_coach_status": gemini_status["status"],
         "version": "0.2.0",
     }

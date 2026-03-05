@@ -12,10 +12,10 @@ class UserLogin(BaseModel):
     password: str
 
 class ProfileUpdate(BaseModel):
-    age: Optional[int]
-    occupation: Optional[str]
-    goal: Optional[str]
-    daily_study_target: Optional[int]
+    age: Optional[int] = None
+    occupation: Optional[str] = None
+    goal: Optional[str] = None
+    daily_study_target: Optional[int] = None
     # Yeni AI alanları (opsiyonel)
     learning_style: Optional[str] = None
     work_tendency: Optional[str] = None

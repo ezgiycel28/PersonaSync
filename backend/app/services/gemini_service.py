@@ -226,7 +226,8 @@ class PersonaSyncAIEngine:
     async def generate_coaching_advice(
         self, 
         profile: PersonalityProfile, 
-        metrics: BehaviorMetrics
+        metrics: BehaviorMetrics,
+        extra_context: Optional[str] = None
     ) -> CoachResponse:
         """
         API çağrısını yapar ve yapılandırılmış koçluk önerisi döndürür.
@@ -248,6 +249,13 @@ class PersonaSyncAIEngine:
             
             [BEHAVIOR METRICS (LAST 7 DAYS)]:
             {metrics_json}
+            """
+
+            if extra_context:
+                user_prompt += f"""
+            
+            [KULLANICININ BUGÜNKÜ ODAK NOTU]:
+            {extra_context}
             """
 
             # Asenkron istek
