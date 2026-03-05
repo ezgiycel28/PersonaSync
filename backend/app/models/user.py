@@ -26,8 +26,11 @@ class User(Base):
     is_profile_complete = Column(Boolean, default=False)
     
     # AI Kişilik Özellikleri
-    learning_style = Column(String, nullable=True) # visual, auditory, etc.
-    work_tendency = Column(String, nullable=True) # morning_lark, night_owl
+    # NOTE: These columns were added after initial schema creation.
+    # On existing databases, run a migration (e.g. Alembic) or recreate the DB
+    # to add these columns before running the application.
+    learning_style = Column(String, nullable=True) # English token: visual, auditory, kinesthetic, reading_writing, mixed
+    work_tendency = Column(String, nullable=True) # English token: morning_lark, night_owl, sprinter, marathoner
     core_values = Column(String, nullable=True) # Comma separated values
     stress_level = Column(Integer, default=5)
 
