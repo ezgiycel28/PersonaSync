@@ -16,7 +16,7 @@ from contextlib import asynccontextmanager
 from app.api import auth, users, pomodoro
 from app.api import ai_coach                          # ← YENİ
 from app.core.database import engine, Base
-from app.services.gemini_service import get_gemini_service  # ← YENİ
+# from app.services.gemini_service import get_gemini_service  # ← KALDIRILDI (AI Coach kendi yönetiyor)
 
 
 # ──────────────────────────────────────────────

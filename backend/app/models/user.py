@@ -24,6 +24,12 @@ class User(Base):
     goal = Column(String, nullable=True)
     daily_study_target = Column(Integer, nullable=True)
     is_profile_complete = Column(Boolean, default=False)
+    
+    # AI Kişilik Özellikleri
+    learning_style = Column(String, nullable=True) # visual, auditory, etc.
+    work_tendency = Column(String, nullable=True) # morning_lark, night_owl
+    core_values = Column(String, nullable=True) # Comma separated values
+    stress_level = Column(Integer, default=5)
 
     created_at = Column(DateTime, default=datetime.utcnow)
 

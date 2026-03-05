@@ -320,6 +320,45 @@ class SessionSummaryResponse(BaseModel):
 
 
 # ──────────────────────────────────────────────
+# PersonaSync AI Engine Modelleri (Kişisel Koç)
+# ──────────────────────────────────────────────
+
+class LearningStyle(str, Enum):
+    VISUAL = "görsel"
+    AUDITORY = "işitsel"
+    KINESTHETIC = "kinestetik"
+    READING_WRITING = "okuma_yazma"
+    MIXED = "karma"
+
+class WorkTendency(str, Enum):
+    MORNING_LARK = "sabahçı"
+    NIGHT_OWL = "gececi"
+    SPRINTER = "kısa_mesafeci"  # Hızlı, yoğun çalışma
+    MARATHONER = "maratoncu"    # Uzun süreli, istikrarlı çalışma
+
+class PersonalityProfile(BaseModel):
+    """Kullanıcının kişilik ve öğrenme profilini tanımlar."""
+    learning_style: LearningStyle = Field(..., description="Kullanıcının baskın öğrenme stili")
+    work_tendency: WorkTendency = Field(..., description="Kullanıcının çalışma zamanı ve yoğunluk tercihi")
+    core_values: list[str] = Field(default_factory=list, description="Kullanıcıyı motive eden temel değerler")
+    stress_level: int = Field(default=5, ge=1, le=10, description="Kullanıcının genel stres beyanı (1-10)")
+
+class BehaviorMetrics(BaseModel):
+    """Son dönemdeki (örn. son 7 gün) çalışma davranış istatistikleri."""
+    total_study_time_minutes: int = Field(..., ge=0, description="Toplam kaydedilen çalışma süresi (dakika)")
+    completed_tasks_count: int = Field(..., ge=0, description="Tamamlanan görev sayısı")
+    average_focus_duration: float = Field(..., ge=0.0, description="Pomodoro başına ortalama odaklanma süresi (dakika)")
+    most_productive_hour: Optional[int] = Field(None, ge=0, le=23, description="En fazla görevin tamamlandığı günün saati (0-23)")
+    interruption_count: int = Field(default=0, ge=0, description="Çalışma sırasında bölünme veya mola sayısı")
+
+class CoachResponse(BaseModel):
+    """AI Koç tarafından üretilen yapılandırılmış yanıt."""
+    optimal_study_schedule: str = Field(..., description="Kullanıcı verilerine göre önerilen en uygun çalışma saatleri ve düzeni")
+    personalized_strategy: str = Field(..., description="Kullanıcının öğrenme stiline özgü teknikler ve taktikler")
+    motivational_insight: str = Field(..., description="Veriye dayalı, kişiselleştirilmiş ve motive edici içgörü mesajı")
+
+
+# ──────────────────────────────────────────────
 # YARDIMCI ŞEMALAR
 # ──────────────────────────────────────────────
 

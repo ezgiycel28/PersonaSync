@@ -12,10 +12,15 @@ class UserLogin(BaseModel):
     password: str
 
 class ProfileUpdate(BaseModel):
-    age: int
-    occupation: str
-    goal: str
-    daily_study_target: int
+    age: Optional[int]
+    occupation: Optional[str]
+    goal: Optional[str]
+    daily_study_target: Optional[int]
+    # Yeni AI alanları (opsiyonel)
+    learning_style: Optional[str] = None
+    work_tendency: Optional[str] = None
+    core_values: Optional[str] = None # Frontend comma-separated gönderebilir veya List dönüşümü yapılabilir
+    stress_level: Optional[int] = 5
 
 class UserResponse(BaseModel):
     id: int
