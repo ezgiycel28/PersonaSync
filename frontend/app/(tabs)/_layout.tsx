@@ -17,22 +17,50 @@ export default function TabLayout() {
         headerShown: false,
         tabBarButton: HapticTab,
         tabBarStyle: {
-          backgroundColor: colorScheme === 'dark' ? PersonaSyncColors.primary : PersonaSyncColors.white,
-          borderTopColor: colorScheme === 'dark' ? PersonaSyncColors.primaryLight : PersonaSyncColors.lightGray,
+          backgroundColor:
+            colorScheme === 'dark'
+              ? PersonaSyncColors.primary
+              : PersonaSyncColors.white,
+          borderTopColor:
+            colorScheme === 'dark'
+              ? PersonaSyncColors.primaryLight
+              : PersonaSyncColors.lightGray,
         },
-      }}>
+      }}
+    >
       <Tabs.Screen
         name="index"
         options={{
           title: 'Ana Sayfa',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
+          tabBarIcon: ({ color }) => (
+            <IconSymbol size={28} name="house.fill" color={color} />
+          ),
         }}
       />
+
+      {/* ── AI KOÇ — YENİ ─────────────────────── */}
+      <Tabs.Screen
+        name="coach"
+        options={{
+          title: 'AI Koç',
+          tabBarIcon: ({ color, focused }) => (
+            <IconSymbol
+              size={focused ? 30 : 26}
+              name="brain.head.profile"
+              color={color}
+            />
+          ),
+          tabBarBadge: undefined,   // Bildirim sayacı gerekirse buraya
+        }}
+      />
+
       <Tabs.Screen
         name="explore"
         options={{
           title: 'Keşfet',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
+          tabBarIcon: ({ color }) => (
+            <IconSymbol size={28} name="safari.fill" color={color} />
+          ),
         }}
       />
     </Tabs>
