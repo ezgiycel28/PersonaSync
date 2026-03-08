@@ -17,11 +17,11 @@ def update_profile(user_id: int, profile: ProfileUpdate, db: Session = Depends(g
             detail="Kullanıcı bulunamadı"
         )
     
-    # Profili güncelle
-    user.age = profile.age
-    user.occupation = profile.occupation
-    user.goal = profile.goal
-    user.daily_study_target = profile.daily_study_target
+    # Profili güncelle (dinamik)
+    profile_data = profile.model_dump(exclude_unset=True)
+    for key, value in profile_data.items():
+        setattr(user, key, value)
+        
     user.is_profile_complete = True
     
     db.commit()

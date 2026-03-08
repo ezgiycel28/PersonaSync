@@ -1,69 +1,35 @@
 """
-PersonaSync — Gemini AI Service
+PersonaSync — PersonaSync AI Engine
 ================================
-Google Gemini API ile iletişim kuran merkezi servis katmanı.
-Tüm AI Koç operasyonları bu servis üzerinden geçer.
-
-Özellikler:
-- Retry mekanizması (geçici API hatalarında otomatik tekrar)
-- Rate limiting koruması (üstel geri çekilme)
-- Yapılandırılmış JSON çıktı parsing ve doğrulama
-- Detaylı hata yönetimi ve loglama
-- Model seçimi: Flash (hız) ↔ Pro (kalite)
+AI Koç operasyonlarının merkezi motoru.
+Gemini API ve Pandas kullanarak veriye dayalı koçluk hizmeti sunar.
 """
 
 import os
 import json
-import time
 import logging
-from typing import Optional, Any
+import asyncio
+from typing import Optional, List, Dict, Any
+from datetime import datetime
+import pandas as pd
 
 import google.generativeai as genai
-from google.generativeai.types import HarmCategory, HarmBlockThreshold
+from google.generativeai.types import HarmCategory, HarmBlockThreshold, GenerationConfig
 from google.api_core.exceptions import (
     ResourceExhausted,
     ServiceUnavailable,
     DeadlineExceeded,
     GoogleAPIError,
 )
+from app.schemas.ai_coach import PersonalityProfile, BehaviorMetrics, CoachResponse, LearningStyle, WorkTendency
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # ──────────────────────────────────────────────
 # Logger
 # ──────────────────────────────────────────────
 logger = logging.getLogger(__name__)
-
-
-# ──────────────────────────────────────────────
-# Sabitler
-# ──────────────────────────────────────────────
-PRIMARY_MODEL   = "gemini-2.5-flash-lite" 
-FALLBACK_MODEL  = "gemini-2.5-pro"    # Haftalık rapor — daha güçlü analiz
-MAX_RETRIES     = 1        
-RETRY_DELAY_SEC = 1.0      
-
-SAFETY_SETTINGS = {
-    HarmCategory.HARM_CATEGORY_HARASSMENT:        HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-    HarmCategory.HARM_CATEGORY_HATE_SPEECH:        HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-    HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT:  HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-    HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT:  HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-}
-
-# Öneri ve motivasyon üretimi için parametreler
-GENERATION_CONFIG = genai.GenerationConfig(
-    temperature=0.75,      # Yaratıcı ama tutarlı
-    top_p=0.90,
-    top_k=40,
-    max_output_tokens=2048,
-)
-
-# Haftalık rapor için daha az rastgelelik — analitik içerik
-REPORT_GENERATION_CONFIG = genai.GenerationConfig(
-    temperature=0.40,
-    top_p=0.85,
-    top_k=30,
-    max_output_tokens=3072,
-)
-
 
 # ──────────────────────────────────────────────
 # Özel Hata Sınıfları
@@ -88,297 +54,271 @@ class GeminiBlockedError(GeminiServiceError):
     """İçerik güvenlik filtresi tarafından engellendi."""
     pass
 
-
 # ──────────────────────────────────────────────
-# Ana Servis Sınıfı
+# PersonaSync AI Engine (Kişisel Koç)
 # ──────────────────────────────────────────────
-class GeminiService:
+class PersonaSyncAIEngine:
     """
-    PersonaSync için Gemini API wrapper.
-
-    Singleton olarak tasarlanmıştır. `get_gemini_service()` fonksiyonu
-    üzerinden erişin — doğrudan instantiate etmeyin.
-
-    Örnek kullanım (FastAPI endpoint içinde):
-        gemini = get_gemini_service()
-
-        # Ham metin üretimi
-        text = gemini.generate("Kullanıcı için bir motivasyon cümlesi yaz.")
-
-        # Yapılandırılmış JSON üretimi
-        data = gemini.generate_json(
-            prompt="...",
-            expected_keys=["technique", "reason", "steps"]
-        )
+    PersonaSync Verimlilik Koçu Motoru.
+    Kullanıcı verilerini analiz eder, strateji belirler ve kişiselleştirilmiş içerik üretir.
+    Gemini API (google-generativeai) üzerine kuruludur.
     """
 
     def __init__(self):
-        self._primary_model: Optional[genai.GenerativeModel] = None
-        self._fallback_model: Optional[genai.GenerativeModel] = None
-        self._initialize()
+        self._model = None
+        self._api_key = os.getenv("GEMINI_API_KEY")
+        if not self._api_key:
+            # Environment variable yoksa, hata fırlatmadan önce loglayalım
+            # Bu durum development ortamında graceful fail için yararlı olabilir
+            logger.error("GEMINI_API_KEY bulunamadı.")
+            # raise EnvironmentError("GEMINI_API_KEY environment variable not set")
+        
+        if self._api_key:
+            genai.configure(api_key=self._api_key)
+        
+        # Güvenlik Ayarları
+        self._safety_settings = {
+            HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+            HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+            HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+            HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+        }
 
-    # ──────────────────────────────────────
-    # Başlatma
-    # ──────────────────────────────────────
-    def _initialize(self) -> None:
-        """API anahtarını .env'den oku ve modelleri yapılandır."""
-        api_key = os.getenv("GEMINI_API_KEY")
-        if not api_key:
-            raise EnvironmentError(
-                "GEMINI_API_KEY ortam değişkeni bulunamadı. "
-                "backend/.env dosyasına GEMINI_API_KEY=... satırını ekleyin."
+        # Model Konfigürasyonu (Structured Output için response_schema)
+        self._generation_config = GenerationConfig(
+            temperature=0.7,
+            top_p=0.95,
+            top_k=40,
+            max_output_tokens=4096,
+            response_mime_type="application/json",
+            response_schema=CoachResponse
+        )
+
+        if self._api_key:
+            self._model = genai.GenerativeModel(
+                model_name="gemini-1.5-flash", # Hız ve maliyet dengesi
+                generation_config=self._generation_config,
+                safety_settings=self._safety_settings,
+                system_instruction=self._build_system_instruction()
             )
 
-        genai.configure(api_key=api_key)
-        system = self._build_system_instruction()
+    def _build_system_instruction(self) -> str:
+        """
+        AI Koçun persona ve kurallarını içeren sistem talimatını oluşturur.
+        """
+        return """
+        ROLE: PersonaSync Productivity Coach
+        GÖREV: Kullanıcının kişilik özelliklerini ve çalışma verilerini analiz ederek, ona özel, veriye dayalı ve motive edici verimlilik stratejileri geliştirmek.
 
-        self._primary_model = genai.GenerativeModel(
-            model_name=PRIMARY_MODEL,
-            generation_config=GENERATION_CONFIG,
-            safety_settings=SAFETY_SETTINGS,
-            system_instruction=system,
-        )
+        # GİRDİ ANALİZİ:
+        Sana iki tür veri verilecek:
+        1. "profile": Kullanıcının öğrenme stili (Görsel, İşitsel vb.), çalışma eğilimi (Sabahçı, Gececi), değerleri ve stres seviyesi.
+        2. "metrics": Son döneme ait çalışma istatistikleri (Odak süresi, tamamlanan görevler, bölünmeler).
 
-        self._fallback_model = genai.GenerativeModel(
-            model_name=FALLBACK_MODEL,
-            generation_config=REPORT_GENERATION_CONFIG,
-            safety_settings=SAFETY_SETTINGS,
-            system_instruction=system,
-        )
+        # KOÇLUK PRENSİPLERİ (KURALLAR):
+        1. ASLA GENEL GEÇER TAVSİYE VERME: "Daha çok çalış", "Mola ver" gibi cümleler yasak. Bunun yerine: "Verilerine göre 25. dakikada odağın düşüyor, bu yüzden 20/5 tekniğini dene."
+        2. KİŞİLİK UYUMU:
+           - Görsel öğrenenler için: Renk kodları, zihin haritaları, şemalar öner.
+           - İşitsel öğrenenler için: Konuyu sesli anlatma, tartışma grupları öner.
+           - Sabahçılar için: En zor görevleri 09:00-11:00 arasına planla.
+           - Gececiler için: Gece sessizliğinde derin çalışma (Deep Work) stratejileri öner.
+        3. VERİYE DAYALI KONUŞ: "Geçen hafta en verimli saatin 14:00'tü, bu saati proje çalışmalarına ayır." şeklinde veriyi kanıt olarak kullan.
+        4. MOTİVASYON FORMATI: Kullanıcının 'core_values' (temel değerleri) ile hedeflerini bağdaştır. Eğer stres seviyesi yüksekse (>7), sakinleştirici ve küçük adımlar öner. Düşükse meydan okuyucu ol.
+        5. DİL ve TON: Türkçe. Profesyonel, destekleyici, net ve samimi.
 
-        logger.info(
-            "GeminiService başarıyla başlatıldı. "
-            f"Primary: {PRIMARY_MODEL} | Fallback: {FALLBACK_MODEL}"
-        )
+        # ÇIKTI FORMATI:
+        Yanıtın KESİNLİKLE 'CoachResponse' şemasına uygun geçerli bir JSON olmalıdır.
+        """
 
     @staticmethod
-    def _build_system_instruction() -> str:
+    def preprocess_data(raw_logs: List[Dict[str, Any]]) -> BehaviorMetrics:
         """
-        Tüm Gemini isteklerine eklenen temel sistem talimatı.
-        Modelin PersonaSync koçu olarak davranmasını sağlar.
-        """
-        return """Sen PersonaSync'in yapay zeka destekli kişisel verimlilik koçusun.
-
-        Kullanıcıların çalışma verilerini ve kişilik profillerini analiz ederek onlara 
-        özgü, somut ve motive edici Türkçe öneriler sunmak senin temel görevin.
-
-        DAVRANIM KURALLARI:
-        1. Her zaman Türkçe yanıt ver.
-        2. Samimi, sıcak ve destekleyici ol — robotik bir dil kullanma.
-        3. Kullanıcının adını kullan, kişisel ve özel hissettir.
-        4. Somut teknikler öner: Pomodoro varyasyonları, Feynman Tekniği, Active Recall,
-        Spaced Repetition, Mind Mapping, Cornell Notu, Interleaving vb.
-        5. "Daha çok çalış", "odaklan" gibi genel tavsiyelerden kaçın.
-        6. Başarısızlıkları eleştirme; gelişim fırsatı olarak yeniden çerçevele.
-        7. En fazla 3 öneri sun — çok seçenek kişiyi bunaltır.
-        8. JSON formatı istendiğinde SADECE JSON döndür, hiçbir ekstra metin ekleme."""
-
-    # ──────────────────────────────────────
-    # Ham Metin Üretimi
-    # ──────────────────────────────────────
-    def generate(self, prompt: str, use_pro: bool = False) -> str:
-        """
-        Gemini'ye prompt gönder, string yanıt al.
-
+        Ham çalışma loglarını analiz edip özet metrikler çıkarır.
+        
         Args:
-            prompt: Gönderilecek metin
-            use_pro: True ise Pro model kullan (haftalık rapor için)
-
-        Returns:
-            Model yanıtı (string)
-
-        Raises:
-            GeminiBlockedError, GeminiRateLimitError, GeminiTimeoutError,
-            GeminiServiceError
+            raw_logs: Liste halinde dict kayıtlar. Örn:
+                      [{'duration_minutes': 25, 'status': 'completed', 'start_time': '2023-10-01T10:00:00', 'interruptions': 0}, ...]
         """
-        model = self._fallback_model if use_pro else self._primary_model
-        model_name = FALLBACK_MODEL if use_pro else PRIMARY_MODEL
+        if not raw_logs:
+            # Veri yoksa sıfırlanmış metrikler döndür
+            return BehaviorMetrics(
+                total_study_time_minutes=0,
+                completed_tasks_count=0,
+                average_focus_duration=0.0,
+                most_productive_hour=None,
+                interruption_count=0
+            )
 
-        logger.info(
-            f"Gemini isteği — model: {model_name}, "
-            f"prompt: {len(prompt)} karakter"
-        )
-
-        last_error: Exception = GeminiServiceError("Bilinmeyen hata.")
-
-        for attempt in range(1, MAX_RETRIES + 1):
-            try:
-                response = model.generate_content(prompt)
-
-                # Güvenlik filtresi ve boş yanıt kontrolü
-                if not response.candidates:
-                    raise GeminiBlockedError(
-                        "Model yanıt üretemedi — güvenlik filtresi veya boş yanıt."
-                    )
-
-                finish_reason = response.candidates[0].finish_reason.name
-                if finish_reason == "SAFETY":
-                    raise GeminiBlockedError(
-                        "Yanıt güvenlik filtresi tarafından engellendi."
-                    )
-
-                text = response.text.strip()
-                logger.info(f"Yanıt alındı — {len(text)} karakter")
-                return text
-
-            except GeminiBlockedError:
-                raise  # Retry'a gerek yok, direkt fırlat
-
-            except ResourceExhausted as e:
-                wait = RETRY_DELAY_SEC * (2 ** (attempt - 1))
-                last_error = GeminiRateLimitError(
-                    f"API istek limiti aşıldı (deneme {attempt}/{MAX_RETRIES}). "
-                    f"{wait:.0f}s bekleniyor."
-                )
-                logger.warning(f"Rate limit — {wait}s bekleniyor (deneme {attempt})")
-                time.sleep(wait)
-
-            except (ServiceUnavailable, DeadlineExceeded) as e:
-                wait = RETRY_DELAY_SEC * attempt
-                last_error = GeminiTimeoutError(
-                    f"Gemini servisi geçici olarak kullanılamıyor "
-                    f"(deneme {attempt}/{MAX_RETRIES}). {wait:.0f}s bekleniyor."
-                )
-                logger.warning(f"Servis hatası — {wait}s bekleniyor (deneme {attempt})")
-                time.sleep(wait)
-
-            except GoogleAPIError as e:
-                last_error = GeminiServiceError(f"Gemini API hatası: {e}")
-                logger.error(f"API hatası (deneme {attempt}): {e}")
-                if attempt < MAX_RETRIES:
-                    time.sleep(RETRY_DELAY_SEC)
-
-            except Exception as e:
-                last_error = GeminiServiceError(f"Beklenmeyen hata: {e}")
-                logger.exception(f"Beklenmeyen Gemini hatası (deneme {attempt}): {e}")
-                if attempt < MAX_RETRIES:
-                    time.sleep(RETRY_DELAY_SEC)
-
-        raise last_error
-
-    # ──────────────────────────────────────
-    # Yapılandırılmış JSON Üretimi
-    # ──────────────────────────────────────
-    def generate_json(
-        self,
-        prompt: str,
-        expected_keys: list[str],
-        use_pro: bool = False,
-    ) -> dict[str, Any]:
-        """
-        Gemini'den JSON formatında yapılandırılmış veri al.
-        Prompt'a JSON talimatı otomatik eklenir.
-
-        Args:
-            prompt: İstek metni (JSON talimatı otomatik eklenir)
-            expected_keys: Yanıtta bulunması zorunlu anahtarlar
-            use_pro: True ise Pro model kullan
-
-        Returns:
-            Parse edilmiş Python dict
-
-        Raises:
-            GeminiParseError: JSON geçersizse veya zorunlu key eksikse
-        """
-        json_suffix = (
-            "\n\n[FORMAT TALİMATI] Yanıtını SADECE geçerli JSON olarak ver. "
-            "Markdown (```json), açıklama veya başka metin EKLEME. "
-            "Yanıt doğrudan { karakteriyle başlamalı, } ile bitmeli."
-        )
-
-        raw = self.generate(prompt + json_suffix, use_pro=use_pro)
-        return self._parse_and_validate_json(raw, expected_keys)
-
-    def _parse_and_validate_json(
-        self,
-        raw_text: str,
-        expected_keys: list[str],
-    ) -> dict[str, Any]:
-        """
-        Ham metni JSON olarak parse et ve zorunlu anahtarları doğrula.
-        Model bazen markdown içinde JSON dönebilir, bunu temizler.
-        """
-        cleaned = raw_text.strip()
-
-        # Markdown bloğu temizleme: ```json ... ``` veya ``` ... ```
-        if cleaned.startswith("```"):
-            lines = cleaned.splitlines()
-            inner = [
-                line for line in lines
-                if not line.strip().startswith("```")
-            ]
-            cleaned = "\n".join(inner).strip()
-
-        # Parse
         try:
-            data = json.loads(cleaned)
-        except json.JSONDecodeError as e:
-            logger.error(
-                f"JSON parse hatası — hata: {e} | "
-                f"raw (ilk 300 karakter): {raw_text[:300]}"
-            )
-            raise GeminiParseError(
-                f"Model geçersiz JSON döndürdü: {e}"
-            ) from e
+            df = pd.DataFrame(raw_logs)
 
-        # Zorunlu key doğrulama
-        missing = [k for k in expected_keys if k not in data]
-        if missing:
-            raise GeminiParseError(
-                f"JSON yanıtında eksik alanlar: {missing}. "
-                f"Mevcut alanlar: {list(data.keys())}"
-            )
-
-        logger.info(f"JSON doğrulandı — keys: {list(data.keys())}")
-        return data
-
-    # ──────────────────────────────────────
-    # Sağlık Kontrolü
-    # ──────────────────────────────────────
-    def health_check(self) -> dict[str, Any]:
-        """
-        Servisin aktif olup olmadığını test eder.
-        GET /health endpoint'i tarafından çağrılır.
-        """
-        try:
-            response = self.generate(
-                "Sadece 'Aktif' kelimesini döndür.",
-                use_pro=False,
-            )
-            return {
-                "status": "healthy",
-                "model": PRIMARY_MODEL,
-                "response_sample": response[:50],
+            # Sütun isimlerini normalize etme (örnek olarak duration_minutes bekliyoruz ama duration da olabilir)
+            if 'duration' in df.columns and 'duration_minutes' not in df.columns:
+                df['duration_minutes'] = df['duration']
+            
+            # Gerekli sütun kontrolleri ve default değerler
+            expected_cols = {
+                'duration_minutes': 0, 
+                'interruptions': 0, 
+                'status': 'unknown',
+                'start_time': None
             }
+            
+            for col, default_val in expected_cols.items():
+                if col not in df.columns:
+                    df[col] = default_val
+
+            # Sayısal dönüşümler
+            df['duration_minutes'] = pd.to_numeric(df['duration_minutes'], errors='coerce').fillna(0)
+            df['interruptions'] = pd.to_numeric(df['interruptions'], errors='coerce').fillna(0)
+
+            # 1. Toplam Çalışma Süresi
+            total_time = int(df['duration_minutes'].sum())
+
+            # 2. Tamamlanan Görev Sayısı
+            completed_tasks = int(df[df['status'] == 'completed'].shape[0])
+
+            # 3. Ortalama Odak Süresi (Sadece tamamlanan veya kayda değer seanslar)
+            focus_df = df[df['duration_minutes'] > 5] # 5 dk altı gürültü olabilir
+            avg_focus = float(focus_df['duration_minutes'].mean()) if not focus_df.empty else 0.0
+
+            # 4. En Verimli Saat Aralığı
+            most_prod_hour = None
+            if df['start_time'].notna().any():
+                try:
+                    # Datetime çevrimi
+                    temp_df = df.copy()
+                    temp_df['start_time'] = pd.to_datetime(temp_df['start_time'], errors='coerce')
+                    temp_df = temp_df.dropna(subset=['start_time'])
+                    
+                    # Sadece 'completed' olanların saati daha anlamlıdır
+                    completed_times = temp_df[temp_df['status'] == 'completed']
+                    if not completed_times.empty:
+                        most_prod_hour = int(completed_times['start_time'].dt.hour.mode()[0])
+                    elif not temp_df.empty:
+                        # Eğer tamamlanan yoksa, başlanan saatlere bak
+                        most_prod_hour = int(temp_df['start_time'].dt.hour.mode()[0])
+                except Exception as e:
+                    logger.warning(f"Zaman analizi hatası: {e}")
+
+            # 5. Kesinti/Bölünme Sayısı
+            interruption_count = int(df['interruptions'].sum())
+
+            return BehaviorMetrics(
+                total_study_time_minutes=total_time,
+                completed_tasks_count=completed_tasks,
+                average_focus_duration=round(avg_focus, 2),
+                most_productive_hour=most_prod_hour,
+                interruption_count=interruption_count
+            )
+
         except Exception as e:
-            logger.error(f"Health check başarısız: {e}")
-            return {
-                "status": "unhealthy",
-                "error": str(e),
-            }
+            logger.error(f"Veri ön işleme hatası: {e}")
+            # Hata durumunda boş metrik dön
+            return BehaviorMetrics(
+                total_study_time_minutes=0,
+                completed_tasks_count=0,
+                average_focus_duration=0.0,
+                most_productive_hour=None,
+                interruption_count=0
+            )
 
+    async def generate_coaching_advice(
+        self, 
+        profile: PersonalityProfile, 
+        metrics: BehaviorMetrics
+    ) -> CoachResponse:
+        """
+        API çağrısını yapar ve yapılandırılmış koçluk önerisi döndürür.
+        """
+        if not self._api_key or not self._model:
+             raise GeminiServiceError("API sunucusu başlatılamadı (API Key eksik).")
+
+        try:
+            # Prompt için veriyi hazırla
+            # Pydantic model_dump_json() veya model_dump() kullanılabilir
+            profile_json = profile.model_dump_json()
+            metrics_json = metrics.model_dump_json()
+
+            user_prompt = f"""
+            Lütfen aşağıdaki kullanıcı verilerini analiz et ve koçluk planını oluştur:
+            
+            [USER PROFILE]:
+            {profile_json}
+            
+            [BEHAVIOR METRICS (LAST 7 DAYS)]:
+            {metrics_json}
+            """
+
+            # Asenkron istek
+            response = await self._model.generate_content_async(user_prompt)
+            
+            # Yanıtı çözümle
+            # Gemini response_schema ile JSON döndürmeyi garanti eder, ama yine de validate edelim.
+            return CoachResponse.model_validate_json(response.text)
+
+        except (ResourceExhausted, ServiceUnavailable, DeadlineExceeded) as e:
+            logger.error(f"Gemini API Geçici Hatası: {e}")
+            raise GeminiRateLimitError("Servis şu an çok yoğun, lütfen kısa süre sonra tekrar deneyin.")
+            
+        except GoogleAPIError as e:
+            logger.error(f"Gemini API Hatası: {e}")
+            raise GeminiServiceError("AI Koç servisinde bir bağlantı sorunu oluştu.")
+            
+        except Exception as e:
+            logger.exception(f"Beklenmeyen Hata: {e}")
+            raise GeminiServiceError(f"Beklenmeyen bir hata oluştu: {str(e)}")
 
 # ──────────────────────────────────────────────
-# Singleton & Dependency Injection
+# Test Bloğu (Mock Data ile Verifikasyon)
 # ──────────────────────────────────────────────
-_instance: Optional[GeminiService] = None
+if __name__ == "__main__":
+    async def main():
+        print("--- PersonaSync AI Engine Başlatılıyor ---")
+        
+        # 1. Mock Data (Ham Loglar)
+        raw_logs = [
+            {'duration_minutes': 45, 'status': 'completed', 'start_time': '2023-10-27T09:00:00', 'interruptions': 0},
+            {'duration_minutes': 25, 'status': 'interrupted', 'start_time': '2023-10-27T10:00:00', 'interruptions': 2},
+            {'duration_minutes': 50, 'status': 'completed', 'start_time': '2023-10-28T09:15:00', 'interruptions': 1},
+            {'duration_minutes': 30, 'status': 'completed', 'start_time': '2023-10-28T14:00:00', 'interruptions': 0},
+        ]
+        
+        # 2. Preprocessing Testi
+        engine = PersonaSyncAIEngine()
+        print("\n[1] Veri Ön İşleme (Preprocessing)...")
+        metrics = engine.preprocess_data(raw_logs)
+        print(f"   -> Hesaplanan Metrikler: {metrics}")
+
+        # 3. Profil Oluşturma
+        profile = PersonalityProfile(
+            learning_style=LearningStyle.VISUAL,
+            work_tendency=WorkTendency.MORNING_LARK,
+            core_values=["disiplin", "öğrenme"],
+            stress_level=3
+        )
+
+        # 4. Gemini Entegrasyon Testi
+        if os.getenv("GEMINI_API_KEY"):
+            print("\n[2] Gemini API ile Tavsiye Üretiliyor...")
+            try:
+                advice = await engine.generate_coaching_advice(profile, metrics)
+                print("\n✅ AI Koç Yanıtı:")
+                print(f"📅 Program: {advice.optimal_study_schedule}")
+                print(f"🧠 Strateji: {advice.personalized_strategy}")
+                print(f"💡 Motivasyon: {advice.motivational_insight}")
+            except Exception as e:
+                print(f"❌ API Hatası: {e}")
+        else:
+            print("\n⚠️ API Key eksik olduğu için canlı istek atlanıyor.")
+
+    asyncio.run(main())
 
 
-def get_gemini_service() -> GeminiService:
-    """
-    GeminiService singleton'ını döndürür.
-    FastAPI endpoint'lerinde Depends() ile kullanım için tasarlanmıştır.
+_instance: Optional[PersonaSyncAIEngine] = None
 
-    Örnek:
-        @router.post("/daily-advice")
-        def get_advice(gemini: GeminiService = Depends(get_gemini_service)):
-            return gemini.generate_json(...)
-
-    NOT: Uygulama ilk başladığında GEMINI_API_KEY okunur.
-    Anahtar yoksa EnvironmentError fırlatılır ve uygulama başlamaz.
-    """
+def get_ai_engine() -> PersonaSyncAIEngine:
     global _instance
     if _instance is None:
-        _instance = GeminiService()
+        _instance = PersonaSyncAIEngine()
     return _instance
-
