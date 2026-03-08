@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
-from sqlalchemy import func
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -51,8 +50,7 @@ def start_pomodoro(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # ... geri kalan kod aynı kalacak
-    # Aktif pomodoro var mı kontrol et
+    
     active_session = db.query(PomodoroSession).filter(
         PomodoroSession.user_id == current_user.id,
         PomodoroSession.status == PomodoroStatus.ACTIVE
@@ -69,7 +67,6 @@ def start_pomodoro(
         user_id=current_user.id,
         duration_minutes=pomodoro_data.duration_minutes,
         category=pomodoro_data.category,
-        note=pomodoro_data.note,
         status=PomodoroStatus.ACTIVE
     )
     
@@ -79,7 +76,6 @@ def start_pomodoro(
     
     return new_session
 
-# Pomodoro tamamla (Füze fırlatıldı!)
 @router.post("/{pomodoro_id}/complete", response_model=PomodoroResponse)
 def complete_pomodoro(
     pomodoro_id: int,
@@ -109,7 +105,6 @@ def complete_pomodoro(
     
     return session
 
-# Pomodoro iptal et (Başarısız fırlatma)
 @router.post("/{pomodoro_id}/cancel", response_model=PomodoroResponse)
 def cancel_pomodoro(
     pomodoro_id: int,
@@ -141,12 +136,11 @@ def get_active_pomodoro(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    session = db.query(PomodoroSession).filter(
+    return db.query(PomodoroSession).filter(
         PomodoroSession.user_id == current_user.id,
         PomodoroSession.status == PomodoroStatus.ACTIVE
     ).first()
-    
-    return session
+
 
 # Pomodoro geçmişi
 @router.get("/history", response_model=PomodoroHistory)
@@ -169,18 +163,18 @@ def get_pomodoro_history(
     # Kategori breakdown
     category_breakdown = {}
     for s in completed:
-        cat = s.category
-        category_breakdown[cat] = category_breakdown.get(cat, 0) + 1
+        category_breakdown[s.category] = category_breakdown.get(s.category, 0) + 1
     
-    stats = PomodoroStats(
+    return PomodoroHistory(
+        sessions=sessions,
+        stats = PomodoroStats(
         total_sessions=len(sessions),
         completed_sessions=len(completed),
         cancelled_sessions=len(cancelled),
         total_minutes=sum(s.duration_minutes for s in completed),
         category_breakdown=category_breakdown
     )
-    
-    return PomodoroHistory(sessions=sessions, stats=stats)
+    )
 
 # Bugünün istatistikleri (dashboard için)
 @router.get("/today", response_model=PomodoroStats)
@@ -200,8 +194,7 @@ def get_today_stats(
     
     category_breakdown = {}
     for s in completed:
-        cat = s.category
-        category_breakdown[cat] = category_breakdown.get(cat, 0) + 1
+        category_breakdown[s.category] = category_breakdown.get(s.category, 0) + 1
     
     return PomodoroStats(
         total_sessions=len(sessions),

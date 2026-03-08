@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, Enum
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.core.database import Base
@@ -10,12 +10,12 @@ class PomodoroStatus(str, enum.Enum):
     CANCELLED = "cancelled"    # Yarıda bırakıldı (başarısız fırlatma)
 
 class StudyCategory(str, enum.Enum):
-    LESSON = "lesson"           # Ders
-    PROJECT = "project"         # Proje
-    READING = "reading"         # Okuma
-    HOMEWORK = "homework"       # Ödev
-    PERSONAL = "personal"       # Kişisel Gelişim
-    OTHER = "other"             # Diğer
+    LESSON = "lesson"
+    PROJECT = "project"
+    READING = "reading"
+    HOMEWORK = "homework"
+    PERSONAL = "personal"
+    OTHER = "other"
 
 class PomodoroSession(Base):
     __tablename__ = "pomodoro_sessions"
@@ -34,9 +34,6 @@ class PomodoroSession(Base):
     
     # İsteğe bağlı not
     note = Column(String, nullable=True)
-    
-    # Füze sistemi için
-    rocket_type = Column(String, default="basic")  # İleride farklı roket tipleri
     
     # İlişki
     user = relationship("User", back_populates="pomodoro_sessions")

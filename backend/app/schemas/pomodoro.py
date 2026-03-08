@@ -20,11 +20,10 @@ class PomodoroStatusEnum(str, Enum):
 class PomodoroStart(BaseModel):
     duration_minutes: int = 25
     category: StudyCategoryEnum = StudyCategoryEnum.OTHER
-    note: Optional[str] = None
 
 # Pomodoro tamamlama/iptal
 class PomodoroEnd(BaseModel):
-    note: Optional[str] = None  # Tamamlarken not ekleyebilir
+    note: Optional[str] = None  # İsteğe bağlı
 
 # Pomodoro response
 class PomodoroResponse(BaseModel):
@@ -36,7 +35,6 @@ class PomodoroResponse(BaseModel):
     status: str
     category: str
     note: Optional[str] = None
-    rocket_type: str
 
     class Config:
         from_attributes = True
@@ -47,7 +45,7 @@ class PomodoroStats(BaseModel):
     completed_sessions: int
     cancelled_sessions: int
     total_minutes: int
-    category_breakdown: dict  # {"lesson": 5, "project": 3, ...}
+    category_breakdown: dict
 
 # Pomodoro listesi
 class PomodoroHistory(BaseModel):

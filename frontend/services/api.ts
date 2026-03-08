@@ -44,6 +44,49 @@ export interface ApiError {
   detail: string;
 }
 
+export type StudyCategory =
+  | 'lesson'
+  | 'project'
+  | 'reading'
+  | 'homework'
+  | 'personal'
+  | 'other';
+
+export type PomodoroStatus = 'active' | 'completed' | 'cancelled';
+
+export interface PomodoroStart {
+  duration_minutes: number;
+  category: StudyCategory;
+}
+
+export interface PomodoroEnd {
+  note?: string; // İsteğe bağlı
+}
+
+export interface PomodoroSession {
+  id: number;
+  user_id: number;
+  started_at: string;
+  ended_at: string | null;
+  duration_minutes: number;
+  status: PomodoroStatus;
+  category: StudyCategory;
+  note: string | null;
+}
+
+export interface PomodoroStats {
+  total_sessions: number;
+  completed_sessions: number;
+  cancelled_sessions: number;
+  total_minutes: number;
+  category_breakdown: Record<string, number>;
+}
+
+export interface PomodoroHistory {
+  sessions: PomodoroSession[];
+  stats: PomodoroStats;
+}
+
 // API Functions
 export async function registerUser(data: UserRegister): Promise<User> {
   const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
@@ -110,5 +153,90 @@ export async function getUser(userId: number, token: string): Promise<User> {
     throw new Error(error.detail || 'Kullanıcı bilgisi alınamadı');
   }
 
+  return response.json();
+}
+
+//---Pomodoro API Functions-----------------
+export async function startPomodoro(data: PomodoroStart, token: string): Promise<PomodoroSession> {
+  const response = await fetch(`${API_BASE_URL}/api/pomodoro/start`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) {
+    const error: ApiError = await response.json();
+    throw new Error(error.detail || 'Pomodoro başlatılamadı');
+  }
+  return response.json();
+}
+
+export async function completePomodoro(
+  pomodoroId: number,
+  data: PomodoroEnd,
+  token: string
+): Promise<PomodoroSession> {
+  const response = await fetch(`${API_BASE_URL}/api/pomodoro/${pomodoroId}/complete`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) {
+    const error: ApiError = await response.json();
+    throw new Error(error.detail || 'Pomodoro tamamlanamadı');
+  }
+  return response.json();
+}
+
+export async function cancelPomodoro(pomodoroId: number, token: string): Promise<PomodoroSession> {
+  const response = await fetch(`${API_BASE_URL}/api/pomodoro/${pomodoroId}/cancel`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    const error: ApiError = await response.json();
+    throw new Error(error.detail || 'Pomodoro iptal edilemedi');
+  }
+  return response.json();
+}
+
+export async function getActivePomodoro(token: string): Promise<PomodoroSession | null> {
+  const response = await fetch(`${API_BASE_URL}/api/pomodoro/active`, {
+    method: 'GET',
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    const error: ApiError = await response.json();
+    throw new Error(error.detail || 'Aktif oturum alınamadı');
+  }
+  return response.json();
+}
+
+export async function getPomodoroHistory(token: string, days = 7): Promise<PomodoroHistory> {
+  const response = await fetch(`${API_BASE_URL}/api/pomodoro/history?days=${days}`, {
+    method: 'GET',
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    const error: ApiError = await response.json();
+    throw new Error(error.detail || 'Geçmiş alınamadı');
+  }
+  return response.json();
+}
+
+export async function getTodayStats(token: string): Promise<PomodoroStats> {
+  const response = await fetch(`${API_BASE_URL}/api/pomodoro/today`, {
+    method: 'GET',
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    const error: ApiError = await response.json();
+    throw new Error(error.detail || 'Günlük istatistik alınamadı');
+  }
   return response.json();
 }
