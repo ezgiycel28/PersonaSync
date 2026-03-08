@@ -11,6 +11,7 @@ import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.api import auth, users, pomodoro, reporting
 from contextlib import asynccontextmanager
 
 from app.api import auth, users, pomodoro
@@ -62,6 +63,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Router'ları ekle
+app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
+app.include_router(users.router, prefix="/api/users", tags=["Users"])
+app.include_router(pomodoro.router, prefix="/api", tags=["Pomodoro"])
+app.include_router(reporting.router, prefix="/api", tags=["Reporting"])
 
 # ──────────────────────────────────────────────
 # Router'lar
