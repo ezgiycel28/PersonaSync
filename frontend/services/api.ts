@@ -60,7 +60,7 @@ export interface PomodoroStart {
 }
 
 export interface PomodoroEnd {
-  note?: string; // İsteğe bağlı
+  note?: string;
 }
 
 export interface PomodoroSession {
@@ -155,6 +155,7 @@ export async function getUser(userId: number, token: string): Promise<User> {
 
   return response.json();
 }
+
 // Reporting API Functions
 export async function getWeeklyReports(token: string): Promise<any> {
   const response = await fetch(`${API_BASE_URL}/api/reports?limit=20`, {
@@ -203,8 +204,10 @@ export async function generateReport(token: string, weekStart?: string, weekEnd?
     throw new Error(error.detail || 'Rapor oluşturulamadı');
   }
 
+  return response.json();
+}
 
-//---Pomodoro API Functions-----------------
+// Pomodoro API Functions
 export async function startPomodoro(data: PomodoroStart, token: string): Promise<PomodoroSession> {
   const response = await fetch(`${API_BASE_URL}/api/pomodoro/start`, {
     method: 'POST',

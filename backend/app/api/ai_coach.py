@@ -6,7 +6,7 @@ Google Gemini destekli kişisel verimlilik koçu endpoint'leri.
 Bu modül, frontend'den gelen istekleri karşılar, gerekli verileri veritabanından toplar
 ve PersonaSync AI Engine'i tetikleyerek kişiselleştirilmiş yanıtlar üretir.
 """
-
+from __future__ import annotations
 import logging
 from datetime import datetime, timedelta
 from typing import Optional, List
@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Body
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.api.auth import get_current_user
+from app.core.security import get_current_user
 from app.models.user import User
 from app.models.pomodoro import PomodoroSession, PomodoroStatus
 from app.services.gemini_service import (
@@ -60,7 +60,7 @@ def _get_work_tendency(user_tendency: Optional[str]) -> WorkTendency:
 
 @router.post("/daily-advice", response_model=CoachResponse)
 async def get_daily_advice(
-    request: Optional[DailyAdviceRequest] = Body(None),
+    request: DailyAdviceRequest = Body(default=None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     engine: PersonaSyncAIEngine = Depends(get_ai_engine)
